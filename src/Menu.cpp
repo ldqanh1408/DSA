@@ -2,31 +2,30 @@
 #include "../include/Menu.h"
 
 #if defined(_WIN32) || defined(_WIN64)
-    #include <windows.h>
-    #include <conio.h>
+#include <windows.h>
+#include <conio.h>
 
-    void Menu::gotoxy(int x, int y){
+void Menu::gotoxy(int x, int y)
+{
     COORD coord;
     coord.X = x; // col
     coord.Y = y; // row
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 #else
-    #include <stdlib.h>
-    #include <unistd.h>  
+#include <stdlib.h>
+#include <unistd.h>
 
-    void Menu::gotoxy(int x, int y){
-        std::cout << "\033[" << y  << ";" << x << "H";
-
-    }
-    // Định nghĩa lại Sleep cho Linux/macOS
-    void Sleep(long long time) {
-        usleep(time * 1000); // usleep nhận tham số là micro-giây (1 mili-giây = 1000 micro-giây)
-    }
+void Menu::gotoxy(int x, int y)
+{
+    std::cout << "\033[" << y << ";" << x << "H";
+}
+// Định nghĩa lại Sleep cho Linux/macOS
+void Sleep(long long time)
+{
+    usleep(time * 1000); // usleep nhận tham số là micro-giây (1 mili-giây = 1000 micro-giây)
+}
 #endif
-
-
-
 
 void Menu::display_navigation_instructions()
 {
@@ -176,7 +175,8 @@ void Menu::display_delete_aircraft()
                                        
     )";
 }
-void Menu::display_aircraft_exist(){
+void Menu::display_aircraft_exist()
+{
     system("cls");
     std::cout << R"(
                                              __________________________________ 
@@ -186,7 +186,8 @@ void Menu::display_aircraft_exist(){
          )";
     Sleep(2000);
 }
-void Menu::display_empty_aircraft_list(){
+void Menu::display_empty_aircraft_list()
+{
     system("cls");
     std::cout << R"(
                                              __________________________________ 
@@ -196,7 +197,8 @@ void Menu::display_empty_aircraft_list(){
          )";
     Sleep(2000);
 }
-void Menu::display_full_aircraft_list(){
+void Menu::display_full_aircraft_list()
+{
     system("cls");
     std::cout << R"(
                                              __________________________________ 
@@ -206,7 +208,8 @@ void Menu::display_full_aircraft_list(){
          )";
     Sleep(2000);
 }
-void Menu::display_success_add_aircraft(){
+void Menu::display_success_add_aircraft()
+{
     system("cls");
     std::cout << R"(
                                              ___________________________________ 
@@ -216,7 +219,8 @@ void Menu::display_success_add_aircraft(){
         )";
     Sleep(2000);
 }
-void Menu::display_success_delete_aircraft(){
+void Menu::display_success_delete_aircraft()
+{
     system("cls");
     std::cout << R"(
                                              ___________________________________ 
@@ -226,7 +230,8 @@ void Menu::display_success_delete_aircraft(){
         )";
     Sleep(2000);
 }
-void Menu::display_success_update_aircraft(){
+void Menu::display_success_update_aircraft()
+{
     system("cls");
     std::cout << R"(
                                              ___________________________________ 
@@ -236,7 +241,8 @@ void Menu::display_success_update_aircraft(){
         )";
     Sleep(2000);
 }
-void Menu::display_aircraft_not_found(){
+void Menu::display_aircraft_not_found()
+{
     system("cls");
     std::cout << R"(
                                              __________________________________ 
@@ -494,7 +500,6 @@ void Menu::display_passenger_list(int current_page, int max_pages)
                         |  Last Name      |  First Name      |  CMND            |  Gender  |  Seat No.             |
                         |_________________|__________________|__________________|__________|_______________________|)";
 
-
     // 📌 Hiển thị điều hướng trang
     gotoxy(35, 26);
     std::cout << "[<] Previous Page    [>] Next Page    [ESC] Exit     Page: " << current_page << "|" << max_pages;
@@ -520,7 +525,8 @@ void Menu::display_available_flights()
 			|_________________|_________________|_____________________|
   )";
 }
-void Menu::display_available_tickets(int current_page, int max_pages) {
+void Menu::display_available_tickets(int current_page, int max_pages)
+{
     system("cls");
     std::cout << R"(
                         ___________________________________________________________________________________________
@@ -536,7 +542,6 @@ void Menu::display_available_tickets(int current_page, int max_pages) {
                         |   Seat Number   |                           Status                                       |
                         |_________________|________________________________________________________________________|)";
 
-
     // 📌 Hiển thị điều hướng trang
     gotoxy(35, 26);
     std::cout << "[<] Previous Page    [>] Next Page    [ESC] Exit     Page: " << current_page << "|" << max_pages;
@@ -547,7 +552,7 @@ void Menu::display_available_tickets(int current_page, int max_pages) {
 void Menu::display_plane_statistics(int current_page, int max_pages)
 { // h;
     system("cls");
-    //PLANE FLIGHT PERFORMANCE STATS
+    // PLANE FLIGHT PERFORMANCE STATS
     std::cout << R"(
                          _____________________________________________________________________________________________
                         |                                                                                            |
@@ -555,7 +560,7 @@ void Menu::display_plane_statistics(int current_page, int max_pages)
                         |____________________________________________________________________________________________|
                         |  Plane ID       |  Plane Type                                 |  Number Flights Performed  |
                         |_________________|_____________________________________________|____________________________|
-									   )";       
+									   )";
     // 📌 Hiển thị điều hướng trang
     gotoxy(35, 26);
     std::cout << "[<] Previous Page    [>] Next Page    [ESC] Exit     Page: " << current_page << "|" << max_pages;
@@ -563,18 +568,19 @@ void Menu::display_plane_statistics(int current_page, int max_pages)
     std::cout << "[^] Move Up          [v] Move Down";
 }
 
-void Menu::display_enter_flight_details()
+// void Menu::display_enter_flight_details()
+// {
+//     // system("cls");
+//     std::cout << R"(
+//                          _______________________________________________________________________________________
+//                         |                |  Date & Time of Dep (dd/mm/yyyy):                                    |
+//                         |  SEARCH FLIGHT |______________________________________________________________________|
+//                         |                |  Destination (e.g., New York):                                       |
+//                         |________________|______________________________________________________________________|
+//         )";
+// }
+void Menu::display_flight_list(int current_page, int max_pages)
 {
-    // system("cls");
-    std::cout << R"(
-                         _______________________________________________________________________________________
-                        |                |  Date & Time of Dep (dd/mm/yyyy hh:mm):                              |
-                        |  SEARCH FLIGHT |______________________________________________________________________|
-                        |                |  Destination (e.g., New York):                                       |
-                        |________________|______________________________________________________________________|
-        )";
-}
-void Menu::display_flight_list(int current_page, int max_pages) {
     system("cls");
     std::cout << R"(
                          ______________________________________________________________________________________
@@ -582,8 +588,7 @@ void Menu::display_flight_list(int current_page, int max_pages) {
                         |______________________________________________________________________________________|
                         | Flight ID      | Plane ID         | Dep Date & Time | Destination      | Status      |
                         |________________|__________________|_________________|__________________|_____________|
-    )" << std::endl;    
-    
+    )" << std::endl;
 
     // 📌 Hiển thị điều hướng trang
     gotoxy(35, 26);
@@ -592,7 +597,8 @@ void Menu::display_flight_list(int current_page, int max_pages) {
     std::cout << "[^] Move Up          [v] Move Down";
     // show_navigation_instructions();
 }
-void Menu::display_plane_list(int current_page, int max_pages) {
+void Menu::display_plane_list(int current_page, int max_pages)
+{
     system("cls");
     std ::cout << R"(
                          _____________________________________________________________________________________
@@ -609,4 +615,22 @@ void Menu::display_plane_list(int current_page, int max_pages) {
     gotoxy(35, 27);
     std::cout << "[^] Move Up          [v] Move Down";
     // show_navigation_instructions();
+}
+void Menu::display_available_tickets_menu(int current_page, int max_pages)
+{
+    system("cls");
+    std::cout << R"(
+                         ____________________________________________________________________________________
+                        |                                                                                    |
+                        |                                 AVAILABLE TICKETS                                  |
+                        |____________________________________________________________________________________|
+                        |             Seat Number              |                     Status                  |
+                        |______________________________________|_____________________________________________|
+
+           )";
+    // 📌 Hiển thị điều hướng trang
+    gotoxy(35, 26);
+    std::cout << "[<] Previous Page    [>] Next Page    [ESC] Exit     Page: " << current_page << "|" << max_pages;
+    gotoxy(35, 27);
+    std::cout << "[^] Move Up          [v] Move Down";
 }

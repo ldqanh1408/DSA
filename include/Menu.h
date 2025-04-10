@@ -2,9 +2,10 @@
 
 #include <iostream>
 
-namespace Menu {
+namespace Menu
+{
     void gotoxy(int x, int y);
-    void display_flight_manager_menu(); 
+    void display_flight_manager_menu();
     void display_navigation_instructions();
     void display_list_instructions();
     void display_login_frame();
@@ -26,7 +27,7 @@ namespace Menu {
     void display_success_update_aircraft();
     void display_aircraft_not_found();
 
-        // Flight Management
+    // Flight Management
     void display_manage_flights();
     void display_search_flight();
     void display_create_new_flight();
@@ -46,11 +47,11 @@ namespace Menu {
     void display_plane_statistics(int current_page, int max_pages);
     void display_flight_list(int current_page, int max_pages);
 
-        // User Information
+    // User Information
     void display_enter_user_information();
     void display_identification_information();
-    void display_enter_flight_details();
-}
+    void display_available_tickets_menu(int current_page, int max_pages);
+    void enter_flight_id_for_available_tickets();
 
-
-
+    
+    }
