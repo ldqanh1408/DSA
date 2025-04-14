@@ -6,7 +6,7 @@
 struct Ticket {
     unsigned int seat; // so ve la so cho ngoi
     char *CMND = nullptr;
-    bool is_sold=false;
+    
 
 
     Ticket();

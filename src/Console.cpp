@@ -1299,7 +1299,7 @@ void Console::merge_sort()
         list_planes[i] = tmp;
     }
 }
-void Console::display_available_tickets(Flight &flight, int current_page, int &max_pages)
+void Console::display_available_tickets_by_flight_ID(Flight &flight, int current_page, int &max_pages)
 {
     const int SEATS_PER_PAGE = 10;
     std::vector<int> available_seats;
@@ -1329,7 +1329,9 @@ void Console::display_available_tickets(Flight &flight, int current_page, int &m
 
         for (int i = start; i < end; ++i)
         {
-            Menu::gotoxy(30, row+i);
+            int line = row + (i - start);
+
+            Menu::gotoxy(30, line);
 
             if (i == start + selected_index)
                 std::cout << ">> ";
@@ -1338,10 +1340,8 @@ void Console::display_available_tickets(Flight &flight, int current_page, int &m
 
             std::cout << std::setw(3) << available_seats[i];
 
-            Menu::gotoxy(66, row);
+            Menu::gotoxy(86, line);
             std::cout << "AVAILABLE";
-
-            row += 2;
         }
 
         Menu::gotoxy(35, 26);
@@ -1356,22 +1356,16 @@ void Console::display_available_tickets(Flight &flight, int current_page, int &m
         {
             key = _getch(); // Get arrow key
 
-            if (key == UP) // UP
-            {
-                if (selected_index > 0)
-                    selected_index--;
-            }
-            else if (key == DOWN) // DOWN
-            {
-                if (selected_index < end - start - 1)
-                    selected_index++;
-            }
-            else if (key == LEFT && current_page > 0) // LEFT
+            if (key == UP && selected_index > 0)
+                selected_index--;
+            else if (key == DOWN && selected_index < end - start - 1)
+                selected_index++;
+            else if (key == LEFT && current_page > 0)
             {
                 current_page--;
                 selected_index = 0;
             }
-            else if (key == RIGHT && current_page < max_pages) // RIGHT
+            else if (key == RIGHT && current_page < max_pages)
             {
                 current_page++;
                 selected_index = 0;
@@ -1380,7 +1374,7 @@ void Console::display_available_tickets(Flight &flight, int current_page, int &m
     }
 }
 
- void Console::enter_flight_id_for_available_tickets()
+void Console::enter_available_tickets_by_ID()
 {
     Menu::display_enter_flight_ID();
     Menu::gotoxy(60, 6);
@@ -1429,7 +1423,7 @@ void Console::display_available_tickets(Flight &flight, int current_page, int &m
 
             while (true)
             {
-                display_available_tickets(*choosing, current_page, max_pages);
+                display_available_tickets_by_flight_ID(*choosing, current_page, max_pages);
 
                 char key = _getch();
                 if (key == 27)
@@ -1467,22 +1461,21 @@ Flight *Console::create_sample_flight()
     flight->total_seats = new unsigned int(seat_count);
     flight->tickets = new Ticket[seat_count];
 
-    for (int i = 0; i < seat_count; ++i)
+    for (int i = 1; i < seat_count; ++i)
     {
         flight->tickets[i].seat = i + 1;
-        flight->tickets[i].is_sold = false;
         flight->tickets[i].CMND = nullptr;
     }
 
     // Giả sử 3 ghế đã bán
-    flight->tickets[2].CMND = new char[10];
+    flight->tickets[3].CMND = new char[10];
     strcpy(flight->tickets[2].CMND, "123456789");
 
     flight->tickets[5].CMND = new char[10];
     strcpy(flight->tickets[5].CMND, "987654321");
 
-    flight->tickets[9].CMND = new char[10];
-    strcpy(flight->tickets[9].CMND, "456123789");
+    // flight->tickets[9].CMND = new char[10];
+    // strcpy(flight->tickets[9].CMND, "456123789");
 
     return flight;
 }

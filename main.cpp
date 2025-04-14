@@ -123,8 +123,9 @@ int main() {
     Flight *sample = console.create_sample_flight(); // 🛫 chuyến bay mẫu
 
     console.list = sample; // ❗️ Gán vào danh sách chính
-    console.enter_flight_id_for_available_tickets();
+    console.enter_available_tickets_by_ID();
 
     return 0;
 }
+
 

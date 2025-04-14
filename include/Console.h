@@ -52,8 +52,7 @@ struct Console
     void enter_manage_plane();
     void merge_sort();
 
-    void enter_flight_id_for_available_tickets();
-    void display_available_tickets(Flight &flight, int current_page, int &max_pages);
-
+    void enter_available_tickets_by_ID();
+    void display_available_tickets_by_flight_ID(Flight &flight, int current_page, int &max_pages);
     Flight *create_sample_flight();
 };
