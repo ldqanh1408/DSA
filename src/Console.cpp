@@ -1299,7 +1299,7 @@ void Console::merge_sort()
         list_planes[i] = tmp;
     }
 }
-void Console::display_available_tickets_by_flight_ID(Flight &flight, int current_page, int &max_pages)
+void Console::display_available_tickets(Flight &flight, int current_page, int &max_pages)
 {
     const int SEATS_PER_PAGE = 10;
     std::vector<int> available_seats;
@@ -1329,9 +1329,7 @@ void Console::display_available_tickets_by_flight_ID(Flight &flight, int current
 
         for (int i = start; i < end; ++i)
         {
-            int line = row + (i - start);
-
-            Menu::gotoxy(30, line);
+            Menu::gotoxy(30, row + i);
 
             if (i == start + selected_index)
                 std::cout << ">> ";
@@ -1340,8 +1338,10 @@ void Console::display_available_tickets_by_flight_ID(Flight &flight, int current
 
             std::cout << std::setw(3) << available_seats[i];
 
-            Menu::gotoxy(86, line);
+            Menu::gotoxy(66, row);
             std::cout << "AVAILABLE";
+
+            row += 2;
         }
 
         Menu::gotoxy(35, 26);
@@ -1356,16 +1356,22 @@ void Console::display_available_tickets_by_flight_ID(Flight &flight, int current
         {
             key = _getch(); // Get arrow key
 
-            if (key == UP && selected_index > 0)
-                selected_index--;
-            else if (key == DOWN && selected_index < end - start - 1)
-                selected_index++;
-            else if (key == LEFT && current_page > 0)
+            if (key == UP) // UP
+            {
+                if (selected_index > 0)
+                    selected_index--;
+            }
+            else if (key == DOWN) // DOWN
+            {
+                if (selected_index < end - start - 1)
+                    selected_index++;
+            }
+            else if (key == LEFT && current_page > 0) // LEFT
             {
                 current_page--;
                 selected_index = 0;
             }
-            else if (key == RIGHT && current_page < max_pages)
+            else if (key == RIGHT && current_page < max_pages) // RIGHT
             {
                 current_page++;
                 selected_index = 0;
@@ -1374,7 +1380,7 @@ void Console::display_available_tickets_by_flight_ID(Flight &flight, int current
     }
 }
 
-void Console::enter_available_tickets_by_ID()
+void Console::enter_flight_id_for_available_tickets()
 {
     Menu::display_enter_flight_ID();
     Menu::gotoxy(60, 6);
@@ -1423,7 +1429,7 @@ void Console::enter_available_tickets_by_ID()
 
             while (true)
             {
-                display_available_tickets_by_flight_ID(*choosing, current_page, max_pages);
+                display_available_tickets(*choosing, current_page, max_pages);
 
                 char key = _getch();
                 if (key == 27)
@@ -1440,7 +1446,7 @@ void Console::enter_available_tickets_by_ID()
 }
 Flight *Console::create_sample_flight()
 {
-    Flight *flight = new Flight;
+    Flight *flight = new Flight();
 
     strcpy(flight->flight_id, "VN123");
     strcpy(flight->destination, "Da Nang");

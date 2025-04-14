@@ -119,11 +119,11 @@ int main() {
     // }
     // test.create_sample_flight();
     // test.enter_flight_id_for_available_tickets();
-    Console console;
-    Flight *sample = console.create_sample_flight(); // 🛫 chuyến bay mẫu
+    // Console console;
+    Flight *sample = test.create_sample_flight(); // 🛫 chuyến bay mẫu
 
-    console.list = sample; // ❗️ Gán vào danh sách chính
-    console.enter_available_tickets_by_ID();
+    test.list = sample; // ❗️ Gán vào danh sách chính
+    test.enter_flight_id_for_available_tickets();
 
     return 0;
 }
