@@ -47,11 +47,10 @@ namespace Menu
     void display_plane_statistics(int current_page, int max_pages);
     void display_flight_list(int current_page, int max_pages);
 
-    // User Information
+    
     void display_enter_user_information();
     void display_identification_information();
     void display_available_tickets_menu(int current_page, int max_pages);
-    void enter_flight_id_for_available_tickets();
-
     
+    void display_enter_flight_details();
     }

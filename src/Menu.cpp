@@ -78,7 +78,7 @@ void Menu::display_manager_menu()
     std::cout << R"(
                              ___________________________________________________________
                             |                                                           |
-                            |                   FLIGHT MANAGEMENT SYSTEM                |
+                            |                      MANAGER MENU                         |
                             |___________________________________________________________|
                             |                                                           |
                             |  [1] Update Plane List                                    |
@@ -90,8 +90,8 @@ void Menu::display_manager_menu()
                             |  [3] Flight Statistics (Sorted by Most Flights)           |
                             |___________________________________________________________|
                                                                                       
-                            [TAB] Back to Main Menu                                  
-                            [ESC] Exit System                                        
+                            [ESC] Back                                 
+                                                                    
                             
     )" << std::endl;
 }
@@ -101,7 +101,7 @@ void Menu::display_flight_manager_menu()
     std::cout << R"(
                              ___________________________________________________________
                             |                                                           |
-                            |                   FLIGHT MANAGEMENT SYSTEM                |
+                            |                   FLIGHT MANAGEMENT                       |
                             |___________________________________________________________|
                             |                                                           |
                             |  [1] Update Flights                                       |
@@ -113,8 +113,8 @@ void Menu::display_flight_manager_menu()
                             |  [3] View Available Seats for a Flight                    |
                             |___________________________________________________________|
                                                                                       
-                            [TAB] Back to Main Menu                                  
-                            [ESC] Exit System        )";
+                                                     
+                            [ESC] Back )";
 }
 void Menu::display_manage_plane()
 { // A
@@ -568,17 +568,18 @@ void Menu::display_plane_statistics(int current_page, int max_pages)
     std::cout << "[^] Move Up          [v] Move Down";
 }
 
-// void Menu::display_enter_flight_details()
-// {
-//     // system("cls");
-//     std::cout << R"(
-//                          _______________________________________________________________________________________
-//                         |                |  Date & Time of Dep (dd/mm/yyyy):                                    |
-//                         |  SEARCH FLIGHT |______________________________________________________________________|
-//                         |                |  Destination (e.g., New York):                                       |
-//                         |________________|______________________________________________________________________|
-//         )";
-// }
+void Menu::display_enter_flight_details()
+{
+    // system("cls");
+    gotoxy(25,15);
+    std::cout << R"(
+                         _______________________________________________________________________________________
+                        |                |  Date of Dep (dd/mm/yyyy):                                           |
+                        |  SEARCH FLIGHT |______________________________________________________________________|
+                        |                |  Destination (e.g., New York):                                       |
+                        |________________|______________________________________________________________________|
+        )";
+}
 void Menu::display_flight_list(int current_page, int max_pages)
 {
     system("cls");
@@ -594,8 +595,8 @@ void Menu::display_flight_list(int current_page, int max_pages)
     gotoxy(35, 26);
     std::cout << "[<] Previous Page    [>] Next Page    [ESC] Exit     Page: " << current_page << "|" << max_pages;
     gotoxy(35, 27);
-    std::cout << "[^] Move Up          [v] Move Down";
-    // show_navigation_instructions();
+    std::cout << "[^] Move Up          [v] Move Down   [TAB] FLight Management";
+    
 }
 void Menu::display_plane_list(int current_page, int max_pages)
 {

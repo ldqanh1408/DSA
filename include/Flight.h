@@ -73,5 +73,5 @@ struct Flight {
     Flight();
 
     bool valid_user(char *CMND);
-
+    bool valid_date(int day, int month, int year);
 };

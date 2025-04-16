@@ -53,6 +53,12 @@ struct Console
     void merge_sort();
 
     void enter_flight_id_for_available_tickets();
-    void display_available_tickets(Flight &flight, int current_page, int &max_pages);
+    void display_available_tickets(Flight &flight);
     Flight *create_sample_flight();
+
+    bool same_date(const date_departure &d1, const date_departure &d2);
+    void enter_flight_by_date_and_destination();
+    void display_flights_by_date_and_destination(const date_departure &search_date, const char *search_des);
+    void enter_available_flights_2();
+    void display_both_menus();
 };

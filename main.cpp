@@ -92,27 +92,27 @@ void generateRandomPlane(Plane *&plane) {
 int main() {
     srand(time(NULL)); // Khởi tạo seed ngẫu nhiên
     Console test;
-    // for(int i = 0; i < 55; ++i) {
+    for(int i = 0; i < 55; ++i) {
         
-    //     generateRandomPlane(test.list_planes[i]);
+        generateRandomPlane(test.list_planes[i]);
         
-    // }
-    // for(int i = 55; i < MAX_PLANE; ++i) {
-    //     test.list_planes[i] = nullptr;
-    // }
-    // for (int i = 0; i < 55; ++i) {
-    //     Flight *new_flight;
-    //     generateRandomFlights(new_flight);
+    }
+    for(int i = 55; i < MAX_PLANE; ++i) {
+        test.list_planes[i] = nullptr;
+    }
+    for (int i = 0; i < 55; ++i) {
+        Flight *new_flight;
+        generateRandomFlights(new_flight);
         
 
-    //     // Gắn vào danh sách liên kết
-    //     if (test.list == nullptr) {
-    //         test.list = new_flight;
-    //     } else {
-    //         new_flight->next = test.list;
-    //         test.list = new_flight;
-    //     }
-    // }
+        // Gắn vào danh sách liên kết
+        if (test.list == nullptr) {
+            test.list = new_flight;
+        } else {
+            new_flight->next = test.list;
+            test.list = new_flight;
+        }
+    }
 
     // while(true) {
     //     test.start_program();
@@ -120,10 +120,14 @@ int main() {
     // test.create_sample_flight();
     // test.enter_flight_id_for_available_tickets();
     // Console console;
-    Flight *sample = test.create_sample_flight(); // 🛫 chuyến bay mẫu
+     // ❗️ Gán vào danh sách chính
+    while(true) {
+         Flight *sample = test.create_sample_flight(); // 🛫 chuyến bay mẫu
 
-    test.list = sample; // ❗️ Gán vào danh sách chính
-    test.enter_flight_id_for_available_tickets();
+        test.list = sample;
+        test.start_program();
+    }
+    
 
     return 0;
 }
