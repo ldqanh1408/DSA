@@ -53,4 +53,5 @@ namespace Menu
     void display_available_tickets_menu(int current_page, int max_pages);
     
     void display_enter_flight_details();
+    void display_not_found();
     }

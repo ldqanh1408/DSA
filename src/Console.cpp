@@ -1731,23 +1731,15 @@ void Console::display_flights_by_date_and_destination(const date_departure &sear
         Flight *old_list = list;
         list = filtered_head;
 
-        enter_available_flights(); // Hiển thị danh sách đã lọc
-        //Khôi phục lại danh sách ban đầu
+        enter_available_flights_2(); // Hiển thị danh sách đã lọc
+        // Khôi phục lại danh sách ban đầu
         list = old_list;
         
     }
     else
     {
         // Nếu không tìm thấy chuyến bay nào phù hợp
-        Menu::gotoxy(120, 17);
-        std::cout << "No flight found!";
-        Menu::gotoxy(120, 18);
-        std::cout << "Press any key to continue...";
-        _getch();
-        Menu::gotoxy(120, 17);
-        std::cout << "                ";
-        Menu::gotoxy(120, 18);
-        std::cout << "                            ";
+        Menu::display_not_found();
         enter_flight_by_date_and_destination();
     }
     char ch = _getch();
@@ -1755,10 +1747,10 @@ void Console::display_flights_by_date_and_destination(const date_departure &sear
     {
         return;
     }
-    else if( ch == TAB) {
-        enter_available_flights_2();
-        return;
-    }
+    // else if( ch == TAB) {
+    //     enter_available_flights_2();
+    //     return;
+    // }
 }
 
 void Console::enter_available_flights_2()

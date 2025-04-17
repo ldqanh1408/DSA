@@ -635,3 +635,18 @@ void Menu::display_available_tickets_menu(int current_page, int max_pages)
     gotoxy(35, 27);
     std::cout << "[^] Move Up          [v] Move Down";
 }
+void Menu :: display_not_found() {
+    system("cls");
+    gotoxy(120, 10);
+    std ::cout << R"(
+                                        __________________________________ 
+                                       |                                  |
+                                       |        No flight found!          |
+                                       |                                  |
+                                       |   Press any key to continue...   |
+                                       |__________________________________|
+                )";
+    char ch = _getch();
+    
+    
+}
