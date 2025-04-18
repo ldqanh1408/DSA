@@ -11,7 +11,7 @@
 #include <conio.h>   // _getch
 #include <iomanip>   // std::setw
 #include <algorithm> // std::min
-#include <vector>   // std::vector
+
 
 struct Console
 {

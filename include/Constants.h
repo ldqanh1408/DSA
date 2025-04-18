@@ -45,7 +45,7 @@ void enter(char *str, int &index, int max_len, char &ch, Conds... conditions) no
     while (true)
     {
         ch = _getch();
-
+        
 // Xử lý phím mũi tên
 #ifdef _WIN32
         if (ch == -32 || ch == 224)
