@@ -78,6 +78,11 @@ namespace Menu {
     void display_user_exist();
     void display_user_not_found();
     void display_user_create_success();
+
+    void display_flight_not_booked_by_user();
+    void display_flight_sold_out();
+    void display_flight_cancelled();
+    void display_flight_completed();
 }
 
 

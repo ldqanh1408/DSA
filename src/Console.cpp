@@ -308,7 +308,8 @@ void Console::enter_plane_statistics() {
     int number_of_planes = get_plane_count();
     //merge sort
     int cur_page = 0, max_page;
-    if (number_of_planes % PLANES_PER_PAGE == 0){
+    if (number_of_planes == 0) max_page = 1;
+    else if (number_of_planes % PLANES_PER_PAGE == 0){
         max_page = max_page = number_of_planes / PLANES_PER_PAGE;
     }
     else {
@@ -501,7 +502,7 @@ void Console::enter_flight_id(int choice) {
             } 
             else {
                 if(choice == 1) enter_passenger_list(choosing);
-                else if(choice == 2)  enter_available_tickets(choosing);
+                else if(choice == 2)  enter_available_tickets(choosing, 2); // 2 là manager
                 strcpy(flight_id, "/0");
                 i = 0;
                 choosing = nullptr;
@@ -523,7 +524,8 @@ void Console::enter_passenger_list(Flight *flight) {
     }
     int cur_row = 0, cur_page = 0;
     int max_page;
-    if (n % PASSENGERS_PER_PAGE == 0){
+    if (n == 0) max_page = 1;
+    else if (n % PASSENGERS_PER_PAGE == 0){
         max_page = n / PASSENGERS_PER_PAGE;
     }
     else {
@@ -665,6 +667,7 @@ void Console::enter_passenger_list(Flight *flight) {
             seat_indices = flight->list_passengers(n);  
             if(n == 0) {
                 //thông báo không có hành khách
+                Menu::display_flight_not_booked_by_user();
                 return;
             }
             cur_row = 0, cur_page = 0;
@@ -683,6 +686,7 @@ void Console::enter_passenger_list(Flight *flight) {
             seat_indices = flight->list_passengers(n);  
             if(n == 0) {
                 //thông báo không có hành khách
+                Menu::display_flight_not_booked_by_user();
                 return;
             }
             cur_row = 0, cur_page = 0;
@@ -734,7 +738,7 @@ void Console::enter_delete_passenger(Flight *flight) {
 
 
 
-void Console::enter_available_tickets(Flight *flight) {
+void Console::enter_available_tickets(Flight *flight, int choice) {
     
     int n = 0;
     // Lấy danh sách chỉ số vé có người đặt (mảng được cấp phát động)
@@ -742,7 +746,8 @@ void Console::enter_available_tickets(Flight *flight) {
     
     int current_page = 0, current_column = 0;
     int max_pages; // Số trang
-    if (n % SEATS_PER_PAGE == 0){
+    if (n == 0) max_pages = 1;
+    else if (n % SEATS_PER_PAGE == 0){
         max_pages = n / SEATS_PER_PAGE;
     }
     else {
@@ -775,16 +780,22 @@ void Console::enter_available_tickets(Flight *flight) {
         switch (flight->cur_status) {
             case status::cancelled:
                 std::cout << "Cancelled";
-                break;
+                Menu::gotoxy(53, 15);
+                Menu::display_flight_cancelled();
+                return;
             case status::available:
                 std::cout << "Available";
                 break;
             case status::sold_out:
                 std::cout << "Sold Out";
-                break;
+                Menu::gotoxy(53, 15);
+                Menu::display_flight_sold_out();
+                return;
             case status::completed:
                 std::cout << "Completed";
-                break;
+                Menu::gotoxy(53, 15);
+                Menu::display_flight_completed();
+                return;
         }
 
         for (int i = start_idx; i < end_idx; i++) {
@@ -825,17 +836,23 @@ void Console::enter_available_tickets(Flight *flight) {
             // sang trang mới vẽ lại khung
             Menu::display_available_tickets();
             current_page--;  // Phím mũi tên trái để chuyển trang về trước
+            current_column = 0;
         }
         else if (key == RIGHT && current_page < max_pages - 1){
             // sang trang mới vẽ lại khung
             Menu::display_available_tickets();
             current_page++;  // Phím mũi tên phải để chuyển trang tiếp theo
+            current_column = 0;
         }
         else if (key == UP && current_column > 0)
             current_column--;  // Phím mũi tên lên để chọn vé ở vị trí trước đó
         else if (key == DOWN && current_column < (end_idx - start_idx - 1))
             current_column++;  // Phím mũi tên xuống để chọn vé ở vị trí sau đó
-        else if (key == ENTER && input != nullptr) { // Phím ENTER
+
+        else if (key == ENTER && input != nullptr) { // Phím ENTER, chỉ user mới đặt được vé
+            if (choice == 2){ // choice == 2 là manager chỉ xem khong đặt được vé
+                continue;
+            }
             int selected = start_idx + current_column;
             int seat_index = seat_indices[selected]; // Lấy chỉ số ghế thực
             if (flight->tickets[seat_index].CMND != nullptr) {
@@ -865,11 +882,6 @@ void Console::enter_available_tickets(Flight *flight) {
             out = std::ofstream("data/Flights/" + std::string(flight->flight_id) + ".txt");
             out << *flight;
 
-
-
-            // Console::input = nullptr;
-            // for(int i = 0; i < 100; ++i) std::cout <<( manager.root == nullptr ? "hehe" : "cc") << std::endl; 
-            // Sleep(10000 );
             break;
         }
     }
@@ -1087,7 +1099,8 @@ void Console::enter_plane_list() {
     int number_of_planes = get_plane_count();
     int cur_page = 0;
     int max_page;
-    if (number_of_planes % PLANES_PER_PAGE == 0){
+    if (number_of_planes == 0) max_page = 1;
+    else if (number_of_planes % PLANES_PER_PAGE == 0){
         max_page = number_of_planes / PLANES_PER_PAGE;
     }
     else {
@@ -1159,7 +1172,13 @@ void Console::enter_plane_list() {
             enter_manage_plane();
             Menu::display_plane_list();
             number_of_planes = get_plane_count();
-            max_page = (number_of_planes / PLANES_PER_PAGE) + 1;
+            if (number_of_planes == 0) max_page = 1;
+            else if (number_of_planes % PLANES_PER_PAGE == 0){
+                max_page = number_of_planes / PLANES_PER_PAGE;
+            }
+            else {
+                max_page = (number_of_planes / PLANES_PER_PAGE) + 1;
+            }
             cur_page = 0;
             cur_row = 0;
         } else if (ch == ESC) {
@@ -1186,7 +1205,8 @@ void Console::enter_available_flights(int choice) {
     unsigned int total_flights = count_flights();
     
     unsigned int number_of_pages;
-    if (total_flights % FLIGHTS_PER_PAGE == 0){
+    if (total_flights == 0) number_of_pages = 1;
+    else if (total_flights % FLIGHTS_PER_PAGE == 0){
         number_of_pages = total_flights / FLIGHTS_PER_PAGE;
     }
     else {
@@ -1358,7 +1378,7 @@ void Console::enter_available_flights(int choice) {
             delete[] pages;
             return;
         } else if (ch == ENTER) {
-            if (cur_row >= count_on_page && cur_row <= count_on_page + 1) {
+            if (cur_row >= count_on_page && cur_row <= count_on_page + 1) { // enter ở thanh tìm kiếm chuyến bay
                 Flight *filtered_list = nullptr;
                 Flight **filtered_pages = nullptr;
                 unsigned int filtered_total = 0;
@@ -1376,7 +1396,8 @@ void Console::enter_available_flights(int choice) {
                 }
 
                 unsigned int filtered_pages_count;
-                if (filtered_total % FLIGHTS_PER_PAGE == 0){
+                if (filtered_total == 0) filtered_pages_count = 1;
+                else if (filtered_total % FLIGHTS_PER_PAGE == 0){
                     filtered_pages_count = filtered_total / FLIGHTS_PER_PAGE;
                 }
                 else {
@@ -1399,18 +1420,23 @@ void Console::enter_available_flights(int choice) {
                 Menu::display_flight_list();
                 Menu::display_enter_flight_details();
                 continue;
-            } else {
+            }
+            else { // enter ở các chuyến bay để đặt vé
                 Flight *selected_flight = page_start;
                 for (unsigned int j = 0; j < cur_row && selected_flight != nullptr; ++j) {
                 
                     selected_flight = selected_flight->next;
                 }
                 if (input == nullptr) {
-                    // enter_available_tickets(selected_flight);
+                    // input == nullptr tức là manager, chỉ xem số ghế không cho đặt vé
+                    enter_available_tickets(selected_flight, 2); // 2 là manager
+                    Menu::display_flight_list();
+                    Menu::display_enter_flight_details();
+                    continue;
                 } else {
                     if (selected_flight->valid_user(input->CMND)) {
                         
-                        enter_available_tickets(selected_flight);
+                        enter_available_tickets(selected_flight, 1); // 1 là user
                         Menu::display_flight_list();
                         Menu::display_enter_flight_details();
                         load_flights_before_view();

@@ -429,6 +429,43 @@ void Menu::display_user_create_success(){
                 )";
     notification();
 }
+void Menu::display_flight_not_booked_by_user(){
+    system("clear");
+    std::cout << R"(
+                                     ____________________________________________________ 
+                                    |                                                    |
+                                    |   NO PASSENGERS HAVE BOOKED SEATS ON THIS FLIHGT   |
+                                    |____________________________________________________|
+                )";
+    notification();
+}
+void Menu::display_flight_sold_out(){
+    std::cout << R"(
+                                             ___________________________________ 
+                                            |                                   |
+                                            |      THIS FLIGHT IS SOLD OUT      |
+                                            |___________________________________|
+                )";
+    notification();
+}
+void Menu::display_flight_cancelled(){
+    std::cout << R"(
+                                             ___________________________________ 
+                                            |                                   |
+                                            |      THIS FLIGHT IS CANCELLED     |
+                                            |___________________________________|
+                )";
+    notification();
+}
+void Menu::display_flight_completed(){
+    std::cout << R"(
+                                             ___________________________________ 
+                                            |                                   |
+                                            |      THIS FLIGHT IS COMPLETED     |
+                                            |___________________________________|
+                )";
+    notification();
+}
 void Menu::display_delete_plane_confirm(){
     system("clear");
     std::cout << R"(

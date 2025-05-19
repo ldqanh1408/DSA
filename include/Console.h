@@ -42,7 +42,7 @@ struct Console {
     void start_program();
     void enter_manager_menu();
     void enter_plane_list();
-    void enter_available_tickets(Flight *flight);
+    void enter_available_tickets(Flight *flight, int choice);
     void enter_user_information();
     void enter_available_flights(int choice);
     void enter_flight_manager_menu();
