@@ -19,6 +19,7 @@ void Console::load_flights_before_view() {
         if(p->cur_status == status::available || p->cur_status == status::sold_out) {
             if(is_completed(&p->date_dep, &p->time_dep)) {
                 p->cur_status = status::completed;
+                
             }
             std::ofstream out("data/Flights/" + std::string(p->flight_id) + ".txt");
             out << *p;
@@ -126,8 +127,7 @@ void Console::load_flights_from_folder() {
     
     delete[] files;
     list = head;
-    // std::cout << (list != nullptr ? "hehehe" : "huhuhu") << std::endl;
-    // Sleep(2000);
+
 }
 bool Console::is_completed(date_departure *x, time_departure *y) {
     tm t = {};
@@ -520,6 +520,8 @@ void Console::enter_passenger_list(Flight *flight) {
     // Lấy danh sách chỉ số vé có người đặt (mảng được cấp phát động)
     int *seat_indices = flight->list_passengers(n);  
     if(n == 0) {
+        Menu::display_flight_not_booked_by_user();
+        return;
         //thông báo không có hành khách
     }
     int cur_row = 0, cur_page = 0;
@@ -602,6 +604,8 @@ void Console::enter_passenger_list(Flight *flight) {
             
         }
         Menu::display_list_instructions(cur_page + 1, max_page);
+        // thêm chỉ dẫn khi nhấn enter để huỷ vé đó
+        std::cout << "\t\t\t\t[Enter] Cancel ticket";
         Menu::gotoxy(0, 0);
         char key = _getch();
         #ifdef _WIN32
