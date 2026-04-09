@@ -1,241 +1,424 @@
-# Marketplace — Mô Tả Nghiệp Vụ Chi Tiết Từng Actor & Schema Ownership
+# Data Retention, Cleanup Cronjobs & Policy
 
-> Phiên bản: v1.0 | Căn cứ: ERD v4 + API Spec v4.1 + Spring Boot Library Config
-
----
-
-## 1. TỔNG QUAN HỆ THỐNG
-
-Hệ thống là một **Multi-Vendor Marketplace** — nơi nhiều Seller có thể mở gian hàng và bán sản phẩm cho Buyer trên cùng một nền tảng, thanh toán qua Stripe Connect, với Admin là người điều hành nền tảng.
-
-**Kết luận MVP:** Database và API đã **đầy đủ và hoàn thiện** cho phạm vi MVP. Không có gap nghiệp vụ nào bị bỏ sót. Tất cả luồng từ đăng ký → mua hàng → thanh toán → hoàn tiền đã được cover. Hệ thống sẵn sàng để bắt đầu implement.
+> Phiên bản: v1.0 | Áp dụng cho: Marketplace Microservices (Java 25 / Spring Boot 4.0.4)
+> Tất cả cronjob chạy trong **Worker Service** — Quartz Scheduler + ShedLock (PostgreSQL provider)
 
 ---
 
-## 2. ACTOR: BUYER (Người Mua)
+## 1. NGUYÊN TẮC CHUNG
 
-### 2.1. Định nghĩa
-Là người dùng đã đăng ký tài khoản và có role `BUYER`. Đây là role mặc định được gán tự động khi đăng ký. Một user có thể đồng thời là cả BUYER lẫn SELLER.
-
-### 2.2. Luồng nghiệp vụ chi tiết
-
-#### A. Đăng ký & Quản lý tài khoản
-- Đăng ký bằng `username + email + phone + password + full_name`. Hệ thống tự động tạo `LOYALTY_ACCOUNT` (1-1) và gán role `BUYER`.
-- Đăng nhập bằng `username | email | phone` và nhận cặp `access_token (15 phút) + refresh_token`. Token dùng RS256.
-- Xem/cập nhật thông tin cá nhân: `full_name`, `avatar_url` (upload lên MinIO trước), `phone` (cần xác minh OTP).
-- Quản lý sổ địa chỉ: thêm/sửa/xóa địa chỉ giao hàng, đặt 1 địa chỉ làm mặc định (`is_default = true`) để hỗ trợ Fast Checkout.
-
-#### B. Khám phá & Tìm kiếm sản phẩm
-- Truy cập trang chủ và duyệt danh mục (category tree).
-- Tìm kiếm full-text qua Elasticsearch: tìm theo tên, mô tả, thuộc tính động, lọc theo `price_min/max`, `category`, `seller`, `is_flash`.
-- Xem chi tiết sản phẩm: ảnh, mô tả, variants (size/màu sắc/...), giá, tồn kho.
-
-#### C. Giỏ hàng
-- Thêm variant vào giỏ hàng (MongoDB, đọc/ghi rất nhanh). Mỗi `MG_CART_ITEM` lưu `price_snapshot` tại thời điểm thêm — giá này **không tự thay đổi** khi Seller cập nhật giá sau này.
-- Nếu item thuộc Flash Sale, `fs_item_id` được gắn vào cart item.
-- Cập nhật số lượng, xóa item khỏi giỏ.
-- Giỏ hàng tồn tại liên tục theo `user_id` (1 user — 1 giỏ).
-
-#### D. Đặt hàng (Checkout)
-- Buyer chọn items trong giỏ, chọn địa chỉ giao hàng (hoặc dùng địa chỉ mặc định), chọn có dùng điểm thưởng hay không.
-- Hệ thống tạo `PARENT_ORDER` (đơn tổng) và tự động tách thành nhiều `ORDERS` (đơn con) theo từng Seller. Ví dụ: giỏ hàng có sản phẩm của 3 Seller → 1 PARENT_ORDER + 3 ORDERS.
-- `shipping_address` được snapshot vào từng ORDER (JSONB) — đảm bảo địa chỉ không thay đổi dù Buyer cập nhật sổ địa chỉ sau này.
-
-#### E. Thanh toán
-- Buyer thanh toán toàn bộ `PARENT_ORDER` qua Stripe (hoặc VNPay).
-- Nếu dùng điểm thưởng: `PARENT_ORDER.loyalty_discount` được trừ vào `final_amt`.
-- Stripe WebHook xác nhận thanh toán thành công → `TRANSACTIONS.status = SUCCESS` → phát sự kiện `payment.success` → Order Service cập nhật tất cả ORDERS trong parent sang `PAID`.
-
-#### F. Theo dõi đơn hàng
-- Xem danh sách tất cả đơn hàng của mình, lọc theo `status`.
-- Xem chi tiết 1 đơn: `ORDER_ITEMS`, giá snapshot, địa chỉ giao, `tracking_number`.
-- Nhận thông báo real-time qua SSE khi trạng thái đơn thay đổi.
-
-#### G. Hoàn tiền (Refund)
-Buyer được phép yêu cầu hoàn tiền trong các trường hợp: hàng lỗi, không đúng mô tả, không nhận được hàng, v.v.
-
-- **Hoàn toàn phần (Partial Refund):** Chọn từng item trong 1 sub-order, nhập số lượng cần hoàn, lý do, upload ảnh bằng chứng.
-- **Hoàn toàn bộ đơn tổng (Full Refund):** Chọn items từ nhiều sub-order/seller trong cùng 1 PARENT_ORDER. Hệ thống tự tạo cùng `group_ref` UUID, tách thành nhiều REFUND records (1 per seller), xử lý song song.
-- Theo dõi trạng thái từng yêu cầu hoàn tiền (PENDING → SUCCESS | REJECTED | FAILED).
-
-#### H. Điểm thưởng (Loyalty)
-- Xem số dư điểm (`available_points`), lịch sử giao dịch điểm.
-- Điểm được tích lũy tự động khi đơn hàng chuyển sang `DELIVERED` (sự kiện do Order Service phát).
-- Điểm có ngày hết hạn (`expires_at` trong `POINT_TRANSACTIONS`).
-- Ước tính điểm sẽ nhận hoặc có thể dùng trước khi thanh toán.
-
-#### I. Flash Sale
-- Xem danh sách session đang `ACTIVE` / `UPCOMING`.
-- Đăng ký nhắc nhở trước khi session bắt đầu (`FS_REMINDERS`).
-- Mua flash sale (endpoint chịu tải cao — WebFlux + Redis Lua Script): hệ thống kiểm tra `flash_stock` và `limit_per_user` nguyên tử trên Redis. Trả về `409 SOLD_OUT` hoặc `400 LIMIT_EXCEEDED` ngay lập tức nếu không thỏa điều kiện.
+| Nguyên tắc | Nội dung |
+|---|---|
+| **Soft Delete First** | Mọi dữ liệu cần xóa đều được đánh dấu trước (soft delete), sau một khoảng thời gian grace period mới hard delete. |
+| **Distributed Lock** | Mọi cronjob dùng ShedLock — đảm bảo chỉ 1 node chạy 1 job tại 1 thời điểm trong môi trường multi-instance. |
+| **Audit Trail** | Các bảng tài chính (`TRANSACTIONS`, `REFUNDS`, `POINT_TRANSACTIONS`) **không bao giờ bị hard delete**. Chỉ archive nếu cần. |
+| **Idempotent** | Mọi cleanup job phải idempotent — chạy 2 lần kết quả như chạy 1 lần. |
+| **Off-peak Execution** | Tất cả job nặng chạy ngoài giờ cao điểm: **02:00 – 05:00 UTC+7**. |
+| **Batch Size** | Mỗi lần xử lý tối đa 500–1000 bản ghi để tránh lock table. Dùng `LIMIT` + loop nếu cần. |
 
 ---
 
-## 3. ACTOR: SELLER (Người Bán)
-
-### 3.1. Định nghĩa
-Là người dùng có role `SELLER`. Role này được thêm vào bảng `ROLES` — không xóa role BUYER đang có. Seller phải hoàn tất onboarding Stripe mới có thể nhận tiền.
-
-### 3.2. Luồng nghiệp vụ chi tiết
-
-#### A. Đăng ký làm Seller
-- Seller tự upgrade role từ màn hình profile (thêm record `SELLER` vào `ROLES`).
-- Bắt đầu onboarding Stripe Connect (Express Account): hệ thống tạo `acct_xxx` và trả về `onboarding_url` (Account Link URL của Stripe). Seller điền thông tin định danh (KYC) và gắn tài khoản ngân hàng trực tiếp trên Stripe.
-- Thông tin onboarding được lưu vào `SELLER_STRIPE_ACCOUNTS`: `account_status`, `charges_enabled`, `payouts_enabled`, `details_submitted`.
-- Stripe Webhook `account.updated` tự động sync trạng thái về.
-
-#### B. Quản lý sản phẩm
-- **Tạo sản phẩm:** Tạo product với tên, mô tả, danh mục, ảnh (upload MinIO), attributes động (size/màu/...), và ít nhất 1 variant.
-  - Mỗi variant có `sku_code` (unique), `tier_name`, `price`.
-  - Mỗi variant tự động có 1 bản ghi `MG_INVENTORIES` với `stock_total = 0`.
-- Sản phẩm mới tạo có `status = PENDING`, chờ Admin duyệt.
-- **Sửa sản phẩm:** Cập nhật thông tin, ảnh, thuộc tính. Nếu cần duyệt lại thì status reset về PENDING.
-- **Xóa sản phẩm:** Soft delete (`deleted_at`). Sản phẩm không còn hiển thị, nhưng dữ liệu lịch sử đơn hàng vẫn toàn vẹn.
-- **Đăng ký Flash Sale:** Submit sản phẩm (SKU cụ thể) vào session flash sale với `flash_price` và `flash_stock`. Chờ Admin duyệt (`FS_ITEMS.status = PENDING → APPROVED`).
-
-#### C. Quản lý tồn kho
-- Điều chỉnh tồn kho theo từng SKU (`delta` dương/âm, kèm lý do). Hệ thống validate không cho `stock_available` xuống âm.
-- Xem lịch sử nhập/xuất/điều chỉnh theo SKU (audit log).
-- Tồn kho bị trừ (lock) khi Buyer đặt hàng → chỉ release chính thức khi đơn `DELIVERED` hoặc `CANCELLED`.
-
-#### D. Quản lý đơn hàng
-- Xem danh sách các `ORDERS` mà mình là `seller_id`, lọc theo status.
-- Cập nhật trạng thái đơn: `PAID → SHIPPING` (gắn `tracking_number`) → `DELIVERED`.
-- Xem chi tiết từng đơn, bao gồm `ORDER_ITEMS`, địa chỉ giao hàng snapshot.
-
-#### E. Nhận tiền (Payout)
-- **Đơn 1 Seller:** Stripe dùng Destination Charges — tự động split tại thời điểm charge: `final_amt - application_fee_amount` vào tài khoản Seller, `application_fee_amount` về Platform.
-- **Đơn nhiều Seller:** Platform thu toàn bộ tiền trước, sau đó Payment Service gọi Transfer API để chuyển tiền cho từng Seller tương ứng. `stripe_transfer_id` được lưu vào `TRANSACTIONS`.
-- Seller rút tiền về tài khoản ngân hàng trực tiếp qua dashboard Stripe (ngoài phạm vi hệ thống).
-
-#### F. Xử lý hoàn tiền
-- Nhận thông báo khi có yêu cầu hoàn tiền liên quan đến đơn của mình.
-- Khi Admin duyệt refund, Stripe tự động reverse transfer từ tài khoản Seller về Platform trước khi refund về Buyer.
-- Trust score bị trừ 5 điểm mỗi khi Admin phải can thiệp duyệt refund thủ công.
+## 2. DANH SÁCH CRONJOB
 
 ---
 
-## 4. ACTOR: ADMIN (Quản Trị Viên)
+### JOB-01 · Flash Sale Session Lifecycle Manager
 
-### 4.1. Định nghĩa
-Là người dùng có role `ADMIN`. Có quyền cao nhất trong hệ thống, không giới hạn bởi ownership. Admin không thể tự đăng ký role này — phải được cấp trực tiếp trong DB.
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Tự động chuyển trạng thái `FS_SESSIONS`: UPCOMING → ACTIVE khi đến giờ, ACTIVE → ENDED khi hết giờ. |
+| **Cron** | `0 * * * * *` (mỗi 1 phút) |
+| **ShedLock name** | `flash-sale-session-lifecycle` |
+| **Lock duration** | 55 giây |
+| **Bảng tác động** | `FS_SESSIONS`, `FS_ITEMS` |
 
-### 4.2. Luồng nghiệp vụ chi tiết
+**Logic:**
+```sql
+-- Activate sessions
+UPDATE FS_SESSIONS
+SET status = 'ACTIVE', updated_at = NOW()
+WHERE status = 'UPCOMING' AND start_time <= NOW();
 
-#### A. Quản lý người dùng
-- Xem danh sách tất cả user, tìm kiếm/lọc.
-- **Khóa tài khoản (`LOCK`):** User bị khóa không thể đăng nhập (trả về `403`). Dùng khi vi phạm chính sách.
-- **Mở khóa (`UNLOCK`):** Khôi phục quyền truy cập.
-- **Điều chỉnh Trust Score:** Tăng/giảm `USERS.trust_score` với lý do, lưu log vào `TRUST_SCORE_LOGS`. Trust score ảnh hưởng đến ưu tiên hiển thị sản phẩm của Seller và khả năng tham gia Flash Sale.
-- Xem lịch sử thay đổi trust score của từng user.
+-- End sessions
+UPDATE FS_SESSIONS
+SET status = 'ENDED', updated_at = NOW()
+WHERE status = 'ACTIVE' AND end_time <= NOW();
 
-#### B. Duyệt sản phẩm
-- Xem danh sách sản phẩm `status = PENDING`.
-- **Duyệt sản phẩm:** `status → APPROVED` + phát sự kiện `product.approved` → Search Service index sản phẩm vào Elasticsearch.
-- **Từ chối sản phẩm:** `status → REJECTED` + ghi `reject_reason` + thông báo cho Seller.
+-- Sync items của session vừa ENDED (không cần approve thêm)
+UPDATE FS_ITEMS SET status = 'CANCELLED'
+WHERE session_id IN (SELECT id FROM FS_SESSIONS WHERE status = 'ENDED')
+  AND status = 'PENDING';
+```
 
-#### C. Quản lý danh mục
-- CRUD danh mục (tree structure, có `parent_id` và `level`).
-- Không thể xóa danh mục đang có product con hoặc sub-category (`409`).
-
-#### D. Quản lý Flash Sale
-- Tạo session flash sale với `name`, `start_time`, `end_time`.
-- Duyệt/từ chối từng `FS_ITEMS` mà Seller submit vào session.
-- Hệ thống Worker Service (Quartz Scheduler + ShedLock) tự động chuyển `FS_SESSIONS.status`: `UPCOMING → ACTIVE → ENDED` đúng giờ.
-
-#### E. Xử lý hoàn tiền (Adjudication)
-Admin đóng vai trò trọng tài cuối cùng trong tranh chấp:
-- Xem tất cả REFUND requests, lọc theo `status`, `type`, `seller_id`, `group_ref`, date range.
-- **Duyệt hoàn tiền:** Gọi Stripe Refund API (`refunds.create`), có thể override `adjust_amount`. Ghi `admin_note` và `reviewed_by`. Tự động trừ trust score Seller 5 điểm. Phát `refund.admin_approved` event.
-- **Từ chối hoàn tiền:** Ghi `reject_reason`, phát `refund.rejected` event, thông báo cho Buyer.
-
-#### F. Giám sát hệ thống
-- **Failed Events:** Xem danh sách các event/task bị lỗi (`FAILED_EVENTS`), retry thủ công. Dùng khi Kafka consumer gặp exception hoặc external API call thất bại sau N lần retry.
-- Xem `OUTBOX_EVENTS` trạng thái để kiểm tra tắc nghẽn event pipeline.
+**Side effects:** Phát Kafka event `flash_sale.session_started` và `flash_sale.session_ended` → Notification Service push thông báo cho user đã đăng ký reminder.
 
 ---
 
-## 5. ACTOR: SYSTEM (Hệ Thống / Cronjob)
+### JOB-02 · Flash Sale Reminder Dispatcher
 
-Đây không phải human actor, nhưng cần mô tả vì ảnh hưởng trực tiếp đến dữ liệu.
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Gửi thông báo nhắc nhở cho Buyer đã đăng ký trước khi Flash Sale session bắt đầu 15 phút. |
+| **Cron** | `0 * * * * *` (mỗi 1 phút) |
+| **ShedLock name** | `flash-sale-reminder-dispatcher` |
+| **Lock duration** | 55 giây |
+| **Bảng tác động** | `FS_REMINDERS`, `FS_SESSIONS` |
 
-- **Worker Service (Quartz + ShedLock):** Tự động activate/expire flash sale sessions, expire điểm thưởng (`POINT_TRANSACTIONS`), cleanup outbox events đã xử lý, v.v. (xem chi tiết trong Data Retention Policy).
-- **Stripe Webhook Processor:** Nhận event từ Stripe, cập nhật trạng thái TRANSACTIONS, REFUNDS, SELLER_STRIPE_ACCOUNTS.
-- **Kafka Consumers:** Order Service lắng nghe `flash_sale.item_sold`, Payment Service lắng nghe `refund.requested`, Loyalty Service lắng nghe `order.delivered`, v.v.
-- **Outbox Pattern:** Mọi sự kiện được ghi vào `OUTBOX_EVENTS` trong cùng transaction DB trước khi publish lên Kafka — đảm bảo at-least-once delivery.
+**Logic:**
+```sql
+-- Tìm session sắp bắt đầu trong 15 phút tới
+SELECT r.user_id, r.session_id
+FROM FS_REMINDERS r
+JOIN FS_SESSIONS s ON r.session_id = s.id
+WHERE s.status = 'UPCOMING'
+  AND s.start_time BETWEEN NOW() AND NOW() + INTERVAL '15 minutes';
+-- Publish notification event cho từng user_id tìm được
+-- Đánh dấu đã gửi (hoặc delete record FS_REMINDERS)
+```
+
+**Retention:** Sau khi session `ENDED`, toàn bộ `FS_REMINDERS` của session đó bị xóa (xem JOB-08).
 
 ---
 
-## 6. SCHEMA OWNERSHIP — THUỘC SERVICE NÀO
+### JOB-03 · Loyalty Points Expiry
 
-### 6.1. PostgreSQL Schemas
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Tìm các điểm thưởng đã hết hạn, trừ ra khỏi `available_points` và tạo transaction ghi nhận. |
+| **Cron** | `0 0 2 * * *` (02:00 hàng ngày) |
+| **ShedLock name** | `loyalty-points-expiry` |
+| **Lock duration** | 10 phút |
+| **Bảng tác động** | `POINT_TRANSACTIONS`, `LOYALTY_ACCOUNTS` |
 
-| Schema / Bảng | Owned By | Ghi chú |
+**Policy:** Điểm thưởng từ 1 đơn hàng hết hạn sau **365 ngày** kể từ `expires_at` (set lúc tạo POINT_TRANSACTION).
+
+**Logic:**
+```sql
+-- Tìm điểm EARNED/CONFIRMED chưa hết hạn chưa bị xử lý
+SELECT id, user_id, delta FROM POINT_TRANSACTIONS
+WHERE type = 'EARNED'
+  AND status = 'CONFIRMED'
+  AND expires_at <= NOW()
+  AND delta > 0
+LIMIT 500;
+
+-- Với mỗi bản ghi:
+-- 1. Tạo POINT_TRANSACTIONS mới: type='EXPIRED', delta = -original_delta
+-- 2. UPDATE LOYALTY_ACCOUNTS: available_points -= original_delta, expired_points += original_delta
+-- 3. Dùng Optimistic Locking (version field) để tránh race condition
+```
+
+**Retention cho POINT_TRANSACTIONS:** Lưu vĩnh viễn (audit trail tài chính). Không xóa.
+
+---
+
+### JOB-04 · Outbox Event Publisher
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Đọc các event `PENDING` trong `OUTBOX_EVENTS`, publish lên Kafka, cập nhật status. |
+| **Cron** | `0/10 * * * * *` (mỗi 10 giây) |
+| **ShedLock name** | `outbox-event-publisher-{serviceName}` (mỗi service có lock riêng) |
+| **Lock duration** | 9 giây |
+| **Bảng tác động** | `OUTBOX_EVENTS` (mỗi service DB) |
+
+**Logic:**
+```sql
+SELECT id, topic, payload FROM OUTBOX_EVENTS
+WHERE status = 'PENDING'
+ORDER BY created_at ASC
+LIMIT 100;
+
+-- Publish từng event lên Kafka
+-- Nếu thành công: status = 'PROCESSED', processed_at = NOW()
+-- Nếu thất bại: retry_count++; nếu retry_count >= 5 → status = 'FAILED', insert vào FAILED_EVENTS
+```
+
+**Cleanup OUTBOX_EVENTS:**
+- `status = 'PROCESSED'` → xóa sau **7 ngày** (JOB-05).
+- `status = 'FAILED'` → đã chuyển sang `FAILED_EVENTS`, xóa sau **3 ngày**.
+
+---
+
+### JOB-05 · Outbox Events Cleanup
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Xóa các OUTBOX_EVENTS đã xử lý xong để tránh bảng phình to. |
+| **Cron** | `0 0 3 * * *` (03:00 hàng ngày) |
+| **ShedLock name** | `outbox-cleanup` |
+| **Lock duration** | 5 phút |
+| **Bảng tác động** | `OUTBOX_EVENTS` |
+
+```sql
+DELETE FROM OUTBOX_EVENTS
+WHERE status = 'PROCESSED'
+  AND processed_at < NOW() - INTERVAL '7 days';
+
+DELETE FROM OUTBOX_EVENTS
+WHERE status = 'FAILED'
+  AND created_at < NOW() - INTERVAL '3 days';
+```
+
+---
+
+### JOB-06 · Failed Events Cleanup
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Xóa các FAILED_EVENTS đã được resolve hoặc đã quá lâu ở trạng thái DEAD. |
+| **Cron** | `0 0 3 30 * ?` (03:00 ngày 30 hàng tháng) |
+| **ShedLock name** | `failed-events-cleanup` |
+| **Lock duration** | 10 phút |
+| **Bảng tác động** | `FAILED_EVENTS` |
+
+**Policy:**
+
+| Status | Retention | Hành động |
 |---|---|---|
-| `USERS` | **Identity Service** | Source of truth cho user |
-| `ROLES` | **Identity Service** | |
-| `ADDRESSES` | **Identity Service** | |
-| `TRUST_SCORE_LOGS` | **Identity Service** | Admin ghi qua Identity API |
-| `SELLER_STRIPE_ACCOUNTS` | **Payment Service** | Stripe onboarding data |
-| `TRANSACTIONS` | **Payment Service** | Payment intent records |
-| `REFUNDS` | **Payment Service** (ghi) / Order Service (đọc) | Payment Service là writer duy nhất |
-| `REFUND_ITEMS` | **Payment Service** | |
-| `PARENT_ORDERS` | **Order Service** | |
-| `ORDERS` | **Order Service** | |
-| `ORDER_ITEMS` | **Order Service** | |
-| `LOYALTY_ACCOUNTS` | **Order Service** (đọc amount) / **Loyalty Service** (ghi) | Loyalty Service là writer |
-| `POINT_TRANSACTIONS` | **Loyalty Service** | |
-| `FS_SESSIONS` | **Flash Sale Service** | |
-| `FS_ITEMS` | **Flash Sale Service** | |
-| `FS_REMINDERS` | **Flash Sale Service** | |
-| `OUTBOX_EVENTS` | **Mỗi service tự có bảng riêng** | Không share chung — mỗi DB có 1 bảng OUTBOX_EVENTS của chính nó |
-| `FAILED_EVENTS` | **Worker Service** | Tập trung các event dead-letter từ tất cả service |
-| `SHEDLOCK` | **Worker Service** | Distributed lock table |
+| `RESOLVED` | 30 ngày sau khi resolve | Hard delete |
+| `DEAD` | 90 ngày | Hard delete (sau khi đã manual review) |
+| `MANUAL_INTERVENTION` | Không tự xóa | Admin phải đổi status trước |
+| `PENDING` | Không tự xóa | Vẫn đang trong hàng chờ retry |
 
-> ⚠️ **Lưu ý quan trọng:** Trong microservices, mỗi service có **database riêng**. Các bảng liệt kê trên không nằm chung 1 PostgreSQL instance — chúng được phân tách theo service. Kết nối cross-service qua Kafka events hoặc gRPC calls, **không bao giờ** JOIN cross-DB trực tiếp.
+```sql
+DELETE FROM FAILED_EVENTS
+WHERE status = 'RESOLVED'
+  AND updated_at < NOW() - INTERVAL '30 days';
 
-### 6.2. MongoDB Collections
-
-| Collection | Owned By | Ghi chú |
-|---|---|---|
-| `MG_CATEGORIES` | **Product Service** | Admin CRUD qua Product Service API |
-| `MG_PRODUCTS` | **Product Service** | |
-| `MG_PRODUCT_VARIANTS` | **Product Service** | |
-| `MG_INVENTORIES` | **Product Service** | Stock management |
-| `MG_CARTS` | **Cart Service** | Đã chuyển sang MongoDB |
-| `MG_CART_ITEMS` | **Cart Service** | |
-| `MG_NOTIFICATIONS` | **Notification Service** | TTL index 90 ngày |
-
-### 6.3. Elasticsearch Index
-
-| Index | Owned By | Ghi chú |
-|---|---|---|
-| `ES_PRODUCTS_INDEX` | **Search Service** | Consumer của `product.approved` event từ Product Service. Search Service là reader/writer duy nhất của index này. |
-
-### 6.4. Redis Keys (Không có bảng, nhưng cần rõ ownership)
-
-| Key Pattern | Owned By | Mục đích |
-|---|---|---|
-| `flash:stock:{sessionId}:{skuCode}` | **Flash Sale Service** | Atomic stock counter |
-| `flash:user_bought:{sessionId}:{userId}` | **Flash Sale Service** | Per-user limit tracking |
-| `rate_limit:{userId}:{endpoint}` | **API Gateway** | Rate limiting |
-| `notif:channel:{userId}` | **Notification Service** | Pub/Sub channel |
+DELETE FROM FAILED_EVENTS
+WHERE status = 'DEAD'
+  AND updated_at < NOW() - INTERVAL '90 days';
+```
 
 ---
 
-## 7. SERVICE MAP — PORT & CÔNG NGHỆ
+### JOB-07 · Stale Cart Cleanup
 
-| Service | Port | DB | Pattern | Ghi chú |
-|---|---|---|---|---|
-| API Gateway | :8080 | Redis | WebFlux | JWT validation, Rate Limiting |
-| Identity Service | :8081 | PostgreSQL | Servlet + CQRS/Axon | Auth, User, Address |
-| Product Service | :8082 | MongoDB | Servlet + CQRS/Axon | gRPC Server |
-| Cart Service | :8083 | MongoDB | Servlet (Virtual Threads) | gRPC Client → Product |
-| Order Service | :8087 | PostgreSQL | Servlet + CQRS/Axon (Saga) | Kafka Consumer |
-| Payment Service | :8085 | PostgreSQL | Servlet + CQRS/Axon | gRPC Server, Stripe |
-| Loyalty Service | :8084 | PostgreSQL | Servlet | Kafka Consumer |
-| Flash Sale Service | :8086 | PostgreSQL + Redis | **WebFlux** | Lua Script, 50k req/s |
-| Search Service | :8089 | Elasticsearch | Servlet | Kafka Consumer |
-| Notification Service | :8088 | MongoDB | **WebFlux** | SSE, Redis Pub/Sub |
-| Worker Service | — | PostgreSQL | Servlet (no web) | Quartz, ShedLock |
-| Discovery Service | :8761 | — | — | Eureka Server |
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Xóa giỏ hàng không hoạt động quá lâu. |
+| **Cron** | `0 0 4 * * *` (04:00 hàng ngày) |
+| **ShedLock name** | `stale-cart-cleanup` |
+| **Lock duration** | 10 phút |
+| **Bảng tác động** | `MG_CARTS`, `MG_CART_ITEMS` (MongoDB) |
+| **Thực thi bởi** | Worker Service gọi Product/Cart Service nội bộ qua HTTP, hoặc Cart Service tự có TTL index |
+
+**Policy:**
+
+| Điều kiện | Retention |
+|---|---|
+| Cart của user không đăng nhập (guest) | Không hỗ trợ (hệ thống yêu cầu JWT) |
+| Cart của user đã đăng nhập, `updated_at` cũ hơn 90 ngày | Xóa toàn bộ cart items |
+| Cart item có `fs_item_id` (flash sale) mà session đã `ENDED` | Xóa item ngay (không cần chờ 90 ngày) |
+
+```javascript
+// MongoDB TTL hoặc Aggregate
+db.mg_cart_items.deleteMany({
+  fs_item_id: { $ne: null },
+  // session đã ENDED — cần lookup qua FS_ITEMS
+});
+
+db.mg_carts.find({ updated_at: { $lt: new Date(Date.now() - 90*24*60*60*1000) } })
+  .forEach(cart => {
+    db.mg_cart_items.deleteMany({ cart_id: cart._id });
+    db.mg_carts.deleteOne({ _id: cart._id });
+  });
+```
+
+---
+
+### JOB-08 · Flash Sale Data Cleanup
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Dọn dẹp dữ liệu Flash Sale sau khi session kết thúc. |
+| **Cron** | `0 0 2 * * *` (02:00 hàng ngày) |
+| **ShedLock name** | `flash-sale-cleanup` |
+| **Lock duration** | 5 phút |
+| **Bảng tác động** | `FS_REMINDERS`, `FS_SESSIONS`, `FS_ITEMS` |
+
+**Policy:**
+
+| Bảng | Điều kiện | Retention | Hành động |
+|---|---|---|---|
+| `FS_REMINDERS` | Session đã `ENDED` | 0 ngày (xóa ngay sau khi session kết thúc) | Hard delete |
+| `FS_ITEMS` | Session `ENDED` + status `CANCELLED/REJECTED` | 30 ngày | Hard delete |
+| `FS_ITEMS` | Session `ENDED` + status `APPROVED` | 180 ngày (giữ để báo cáo doanh thu) | Hard delete |
+| `FS_SESSIONS` | Status `ENDED` | 365 ngày | Hard delete |
+
+```sql
+-- Xóa reminders của session đã ended
+DELETE FROM FS_REMINDERS
+WHERE session_id IN (SELECT id FROM FS_SESSIONS WHERE status = 'ENDED');
+
+-- Xóa items của session cũ
+DELETE FROM FS_ITEMS
+WHERE status IN ('CANCELLED', 'REJECTED')
+  AND updated_at < NOW() - INTERVAL '30 days';
+
+DELETE FROM FS_ITEMS
+WHERE status = 'APPROVED'
+  AND session_id IN (
+    SELECT id FROM FS_SESSIONS
+    WHERE status = 'ENDED' AND end_time < NOW() - INTERVAL '180 days'
+  );
+
+-- Xóa session cũ (chỉ khi không còn FS_ITEMS nào)
+DELETE FROM FS_SESSIONS
+WHERE status = 'ENDED'
+  AND end_time < NOW() - INTERVAL '365 days'
+  AND id NOT IN (SELECT DISTINCT session_id FROM FS_ITEMS);
+```
+
+---
+
+### JOB-09 · Notification Cleanup (MongoDB TTL)
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Tự động xóa thông báo cũ. **Không dùng cronjob** — dùng MongoDB TTL Index. |
+| **Loại** | MongoDB TTL Index (không phải Quartz job) |
+| **Bảng tác động** | `MG_NOTIFICATIONS` |
+
+```javascript
+// Index này được tạo 1 lần khi khởi tạo Notification Service
+db.mg_notifications.createIndex(
+  { "created_at": 1 },
+  { expireAfterSeconds: 90 * 24 * 60 * 60 }  // 90 ngày
+);
+```
+
+**Policy:** Thông báo tự xóa sau **90 ngày** kể từ `created_at`. MongoDB TTL background thread chạy mỗi 60 giây.
+
+---
+
+### JOB-10 · Soft-Deleted Products Hard Cleanup
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Xóa vĩnh viễn sản phẩm đã soft delete. |
+| **Cron** | `0 0 3 * * 0` (03:00 Chủ nhật hàng tuần) |
+| **ShedLock name** | `soft-deleted-products-cleanup` |
+| **Lock duration** | 30 phút |
+| **Bảng tác động** | `MG_PRODUCTS`, `MG_PRODUCT_VARIANTS`, `MG_INVENTORIES`, `ES_PRODUCTS_INDEX` |
+
+**Policy:** Sản phẩm có `deleted_at` cũ hơn **30 ngày** mới được hard delete.
+
+**Điều kiện bắt buộc trước khi xóa:**
+- Không còn `ORDERS` nào ở trạng thái `PENDING | PAID | SHIPPING` có chứa SKU của sản phẩm.
+- `MG_INVENTORIES.stock_locked = 0` (không có đơn hàng đang giữ tồn kho).
+
+```javascript
+const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+const products = db.mg_products.find({
+  deleted_at: { $ne: null, $lt: cutoff }
+});
+
+products.forEach(p => {
+  // Kiểm tra không còn active orders → nếu có thì skip
+  const skus = db.mg_product_variants.find({ product_id: p._id }).map(v => v.sku_code);
+  const lockedInventory = db.mg_inventories.findOne({
+    sku_code: { $in: skus }, stock_locked: { $gt: 0 }
+  });
+  if (lockedInventory) return; // Skip sản phẩm này
+
+  db.mg_product_variants.deleteMany({ product_id: p._id });
+  db.mg_inventories.deleteMany({ product_id: p._id });
+  db.mg_products.deleteOne({ _id: p._id });
+  // Gọi Search Service API để xóa khỏi Elasticsearch index
+});
+```
+
+---
+
+### JOB-11 · Trust Score Log Cleanup
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Archive trust score logs quá cũ. |
+| **Cron** | `0 0 4 1 * *` (04:00 ngày 1 hàng tháng) |
+| **ShedLock name** | `trust-score-log-cleanup` |
+| **Lock duration** | 5 phút |
+| **Bảng tác động** | `TRUST_SCORE_LOGS` |
+
+**Policy:** Log cũ hơn **2 năm** có thể xóa. Trước khi xóa, log aggregate (tổng delta theo tháng) được lưu vào file CSV/S3 nếu cần audit.
+
+```sql
+DELETE FROM TRUST_SCORE_LOGS
+WHERE created_at < NOW() - INTERVAL '2 years';
+```
+
+---
+
+### JOB-12 · ShedLock Stale Entry Cleanup
+
+| Thuộc tính | Giá trị |
+|---|---|
+| **Mô tả** | Xóa các ShedLock entry bị stale (node crash mà không release lock). |
+| **Cron** | `0 0 5 * * *` (05:00 hàng ngày) |
+| **ShedLock name** | Không dùng ShedLock cho job này (tránh deadlock) |
+| **Bảng tác động** | `SHEDLOCK` |
+
+```sql
+-- Xóa lock đã hết thời hạn hơn 1 giờ (node crash, không tự release)
+DELETE FROM SHEDLOCK
+WHERE lock_until < NOW() - INTERVAL '1 hour';
+```
+
+---
+
+## 3. POLICY TỔNG HỢP THEO BẢNG
+
+### PostgreSQL
+
+| Bảng | Retention | Hard Delete? | Ghi chú |
+|---|---|---|---|
+| `USERS` | Vĩnh viễn | Không | Chỉ LOCKED, không xóa |
+| `ROLES` | Vĩnh viễn | Không | |
+| `ADDRESSES` | Cho đến khi user tự xóa | Có (theo yêu cầu) | |
+| `TRUST_SCORE_LOGS` | 2 năm | Có (JOB-11) | |
+| `LOYALTY_ACCOUNTS` | Vĩnh viễn | Không | Tài chính |
+| `POINT_TRANSACTIONS` | Vĩnh viễn | Không | Audit trail |
+| `PARENT_ORDERS` | Vĩnh viễn | Không | Tài chính |
+| `ORDERS` | Vĩnh viễn | Không | Tài chính |
+| `ORDER_ITEMS` | Vĩnh viễn | Không | Tài chính |
+| `TRANSACTIONS` | Vĩnh viễn | Không | Tài chính, pháp lý |
+| `REFUNDS` | Vĩnh viễn | Không | Tài chính, pháp lý |
+| `REFUND_ITEMS` | Vĩnh viễn | Không | |
+| `SELLER_STRIPE_ACCOUNTS` | Vĩnh viễn | Không | |
+| `FS_SESSIONS` | 365 ngày sau ENDED | Có (JOB-08) | |
+| `FS_ITEMS` | 30–180 ngày sau session ENDED | Có (JOB-08) | |
+| `FS_REMINDERS` | 0 ngày sau session ENDED | Có (JOB-08) | |
+| `OUTBOX_EVENTS` | 7 ngày (PROCESSED), 3 ngày (FAILED) | Có (JOB-05) | |
+| `FAILED_EVENTS` | 30 ngày (RESOLVED), 90 ngày (DEAD) | Có (JOB-06) | |
+| `SHEDLOCK` | Stale > 1 giờ | Có (JOB-12) | |
+
+### MongoDB
+
+| Collection | Retention | Cơ chế |
+|---|---|---|
+| `MG_PRODUCTS` | 30 ngày sau soft delete | JOB-10 |
+| `MG_PRODUCT_VARIANTS` | Theo product | JOB-10 |
+| `MG_INVENTORIES` | Theo product | JOB-10 |
+| `MG_CARTS` | 90 ngày inactive | JOB-07 |
+| `MG_CART_ITEMS` | 90 ngày inactive / ngay khi FS session ENDED | JOB-07 |
+| `MG_NOTIFICATIONS` | 90 ngày | MongoDB TTL Index |
+
+### Elasticsearch
+
+| Index | Retention | Cơ chế |
+|---|---|---|
+| `ES_PRODUCTS_INDEX` | Sync với MongoDB `MG_PRODUCTS` | Xóa khi sản phẩm hard delete (JOB-10) |
+
+---
+
+## 4. CHECKLIST TRIỂN KHAI
+
+- [ ] Tạo bảng `SHEDLOCK` trong PostgreSQL DB của Worker Service khi khởi tạo
+- [ ] Cấu hình `spring.quartz.job-store-type=jdbc` để Quartz persist jobs
+- [ ] Tạo MongoDB TTL index cho `MG_NOTIFICATIONS.created_at` khi Notification Service start
+- [ ] Đặt alert khi `FAILED_EVENTS` có bản ghi `PENDING` tồn tại > 24 giờ
+- [ ] Đặt alert khi `OUTBOX_EVENTS` có bản ghi `PENDING` tồn tại > 30 phút
+- [ ] Test ShedLock bằng cách kill node giữa chừng, verify không có double execution
+- [ ] Verify tất cả DELETE statement dùng `LIMIT` để tránh lock table toàn bộ
